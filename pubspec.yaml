@@ -28,7 +28,7 @@ flutter:
     - assets/camera.min.lua
     - assets/data.min.lua
     - assets/frame_app.min.lua
-    - assets/sprites/hotdog.png
-    - assets/sprites/nothotdog.png
-    - assets/sprites/text_hotdog.png
-    - assets/sprites/text_nothotdog.png
+    - assets/sprites/20_hotdog.png
+    - assets/sprites/21_text_hotdog.png
+    - assets/sprites/22_nothotdog.png
+    - assets/sprites/23_text_nothotdog.png
