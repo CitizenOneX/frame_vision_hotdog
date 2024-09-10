@@ -6,7 +6,10 @@ import 'package:image/image.dart' as img;
 
 Uint8List convertRgbToNv21Bytes(Uint8List rgb, int width, int height) {
   final int frameSize = width * height;
-  final Uint8List nv21 = Uint8List(frameSize + frameSize ~/ 2);
+  final int uvWidth = (width + 1) ~/ 2; // Rounded up for odd widths
+  final int uvHeight = (height + 1) ~/ 2; // Rounded up for odd heights
+  final int uvSize = uvWidth * uvHeight * 2; // 2 bytes per UV pair
+  final Uint8List nv21 = Uint8List(frameSize + uvSize);
 
   int yIndex = 0;
   int uvIndex = frameSize;
