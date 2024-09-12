@@ -13,8 +13,7 @@ dependencies:
   google_mlkit_commons: ^0.7.1
   google_mlkit_image_labeling: ^0.12.0
   image: ^4.2.0
-  image_mlkit_converter:
-    git: https://github.com/CitizenOneX/image_mlkit_converter.git
+  image_mlkit_converter: ^0.0.1
   logging: ^1.2.0
   simple_frame_app:
     git: https://github.com/CitizenOneX/simple_frame_app.git
