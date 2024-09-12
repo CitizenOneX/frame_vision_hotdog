@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -10,11 +9,11 @@ import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart';
 
-import 'camera.dart';
-import 'image_data_response.dart';
-import 'mlkit_image_converter.dart';
-import 'simple_frame_app.dart';
-import 'sprite.dart';
+import 'package:simple_frame_app/camera_settings.dart';
+import 'package:simple_frame_app/image_data_response.dart';
+import 'package:image_mlkit_converter/image_mlkit_converter.dart';
+import 'package:simple_frame_app/simple_frame_app.dart';
+import 'package:simple_frame_app/sprite.dart';
 
 void main() => runApp(const MainApp());
 
@@ -76,6 +75,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     return rgb;
   }
 
+  /// Loops over each of the sprites in the assets/sprites directory (and declared in pubspec.yaml) and returns an entry with
+  /// each sprite associated with a message_type key: the two hex digits in its filename,
+  /// e.g. 'assets/sprites/1f_mysprite.png' has a message type of 0x1f. This message is used to key the messages in the frameside lua app
   Map<int, String> _filterSpriteAssets(List<String> files) {
     var spriteFiles = files.where((String pathFile) => pathFile.startsWith('assets/sprites/') && pathFile.endsWith('.png')).toList();
 
@@ -104,42 +106,60 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     return spriteMap;
   }
 
-  /// Loops over each of the sprites in the assets/sprites directory and sends each sprite with the message_type
+  /// Loops over each of the filtered sprites in the assets/sprites directory and sends each sprite with the message_type
   /// indicated as two hex digits in its filename, e.g. 'assets/sprites/1f_mysprite.png' has a message code of 0x1f
   /// Sprites should be PNGs with palettes of up to 2, 4, or 16 colors (1-, 2-, or 4-bit indexed palettes)
   /// Alpha channel (4th-RGBA), if present, is dropped before sending to Frame (RGB only, but color 0 is VOID)
   Future<void> _uploadSprites(Map<int, String> spriteMap) async {
     for (var entry in spriteMap.entries) {
+      try {
+        Sprite sprite = spriteFromPngBytes(Uint8List.sublistView(await rootBundle.load(entry.value)));
 
-      var pngBytes = Uint8List.sublistView(await rootBundle.load(entry.value));
-      var imgPng = img.PngDecoder().decode(pngBytes);
+        // send sprite to Frame with its associated message type
+        // FIXME reinstate when Frame is back
+        //await frame!.sendMessage(entry.key, sprite.pack());
+      }
+      catch (e) {
+        _log.severe('$e');
+      }
+    }
+  }
 
-      if (imgPng != null && imgPng.hasPalette && imgPng.palette!.numColors <= 16) {
+  /// Sprites should be PNGs with palettes of up to 2, 4, or 16 colors (1-, 2-, or 4-bit indexed palettes)
+  /// Alpha channel (4th-RGBA), if present, is dropped before sending to Frame (RGB only, but color 0 is VOID)
+  Sprite spriteFromPngBytes(Uint8List pngBytes) {
+    var imgPng = img.PngDecoder().decode(pngBytes);
 
-        // we can process RGB or RGBA format palettes, but any others we just exclude here
-        if (imgPng.palette!.numChannels == 3 || imgPng.palette!.numChannels == 4) {
+    if (imgPng != null && imgPng.hasPalette && imgPng.palette!.numColors <= 16) {
 
-          late Sprite sprite;
+      // resize the image if it's too big - we really shouldn't have to do this for project sprites, just user-picked images
+      if (imgPng.width > 640 || imgPng.height > 400) {
+        // use nearest interpolation, we can't use any interpretation that averages colors
+        imgPng = img.copyResize(imgPng, width: 640, height: 400, maintainAspect: true, interpolation: img.Interpolation.nearest);
+      }
 
-          if (imgPng.palette!.numChannels == 3) {
-            sprite = Sprite(imgPng.width, imgPng.height, imgPng.palette!.numColors, imgPng.palette!.toUint8List(), imgPng.data!.toUint8List());
-          }
-          else if (imgPng.palette!.numChannels == 4) {
-            // strip out the alpha channel from the palette
-            sprite = Sprite(imgPng.width, imgPng.height, imgPng.palette!.numColors, _extractRGB(imgPng.palette!.toUint8List()), imgPng.data!.toUint8List());
-          }
+      // we can process RGB or RGBA format palettes, but any others we just exclude here
+      if (imgPng.palette!.numChannels == 3 || imgPng.palette!.numChannels == 4) {
 
-          _log.fine('Sprite: ${imgPng.width} x ${imgPng.height}, ${imgPng.palette!.numColors} cols, ${sprite.pack().length} bytes');
-          // send sprite to Frame
-          //await frame!.sendMessage(entry.key, sprite.pack());
+        late Sprite sprite;
+
+        if (imgPng.palette!.numChannels == 3) {
+          sprite = Sprite(imgPng.width, imgPng.height, imgPng.palette!.numColors, imgPng.palette!.toUint8List(), imgPng.data!.toUint8List());
         }
-        else {
-          _log.fine('Image not compatible: ${entry.value}');
+        else if (imgPng.palette!.numChannels == 4) {
+          // strip out the alpha channel from the palette
+          sprite = Sprite(imgPng.width, imgPng.height, imgPng.palette!.numColors, _extractRGB(imgPng.palette!.toUint8List()), imgPng.data!.toUint8List());
         }
+
+        _log.fine('Sprite: ${imgPng.width} x ${imgPng.height}, ${imgPng.palette!.numColors} cols, ${sprite.pack().length} bytes');
+        return sprite;
       }
       else {
-        _log.fine('Image not compatible: ${entry.value}');
+        throw Exception('PNG colors must have 3 or 4 channels to be converted to a sprite');
       }
+    }
+    else {
+      throw Exception('PNG must be a valid PNG image with a palette (indexed color) and 16 colors or fewer to be converted to a sprite');
     }
   }
 
@@ -216,7 +236,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
           // In both cases orientation metadata is passed to mlkit, so no need to bake in a rotation
           _stopwatch.reset();
           _stopwatch.start();
-          InputImage mlkitImage = Platform.isAndroid ? rgbImageToNv21InputImage(im) : rgbImageToBgra8888InputImage(im);
+          // Frame images are rotated 90 degrees clockwise so let ML Kit know
+          InputImage mlkitImage = ImageMlkitConverter.imageToMlkitInputImage(im, InputImageRotation.rotation90deg);
           _stopwatch.stop();
           _log.fine('NV21/BGRA8888 conversion took: ${_stopwatch.elapsedMilliseconds} ms');
 
@@ -243,8 +264,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
           currentState = ApplicationState.ready;
           if (mounted) setState(() {});
 
-        } catch (e) {
-          _log.severe('Error converting bytes to image: $e');
+        } catch (e, stacktrace) {
+          _log.severe('Error converting bytes to image: $e $stacktrace');
         }
 
       } catch (e) {
