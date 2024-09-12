@@ -152,6 +152,15 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.2.0"
+  image_mlkit_converter:
+    dependency: "direct main"
+    description:
+      path: "."
+      ref: HEAD
+      resolved-ref: "95397dc78999d1d067f3304b2a8b5d804eafe01a"
+      url: "https://github.com/CitizenOneX/image_mlkit_converter.git"
+    source: git
+    version: "0.0.1"
   leak_tracker:
     dependency: transitive
     description:
