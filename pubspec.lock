@@ -251,11 +251,9 @@ packages:
   simple_frame_app:
     dependency: "direct main"
     description:
-      path: "."
-      ref: HEAD
-      resolved-ref: "28371a715ef531748f98a3661ce57281054b1bf1"
-      url: "https://github.com/CitizenOneX/simple_frame_app.git"
-    source: git
+      path: "../simple_frame_app"
+      relative: true
+    source: path
     version: "0.0.1"
   sky_engine:
     dependency: transitive

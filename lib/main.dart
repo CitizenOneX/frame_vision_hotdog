@@ -9,11 +9,12 @@ import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart';
 
-import 'package:simple_frame_app/camera_settings.dart';
+import 'package:simple_frame_app/tx/camera_settings.dart';
 import 'package:simple_frame_app/image_data_response.dart';
 import 'package:image_mlkit_converter/image_mlkit_converter.dart';
 import 'package:simple_frame_app/simple_frame_app.dart';
-import 'package:simple_frame_app/sprite.dart';
+import 'package:simple_frame_app/tx/code.dart';
+import 'package:simple_frame_app/tx/sprite.dart';
 
 void main() => runApp(const MainApp());
 
@@ -59,21 +60,6 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     super.dispose();
   }
 
-  /// Strips the Alpha byte out of a list of RGBA colors
-  /// Takes a Uint8List of length 4n made of RGBA bytes, and takes the first 3 bytes out of each 4 (RGB)
-  Uint8List _extractRGB(Uint8List rgba) {
-    // The output list will have 3/4 the length of the input list
-    Uint8List rgb = Uint8List((rgba.length * 3) ~/ 4);
-
-    int rgbIndex = 0;
-    for (int i = 0; i < rgba.length; i += 4) {
-      rgb[rgbIndex++] = rgba[i];     // R
-      rgb[rgbIndex++] = rgba[i + 1]; // G
-      rgb[rgbIndex++] = rgba[i + 2]; // B
-    }
-
-    return rgb;
-  }
 
   /// Loops over each of the sprites in the assets/sprites directory (and declared in pubspec.yaml) and returns an entry with
   /// each sprite associated with a message_type key: the two hex digits in its filename,
@@ -113,53 +99,14 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   Future<void> _uploadSprites(Map<int, String> spriteMap) async {
     for (var entry in spriteMap.entries) {
       try {
-        Sprite sprite = spriteFromPngBytes(Uint8List.sublistView(await rootBundle.load(entry.value)));
+        var sprite = TxSprite.fromPngBytes(msgCode: entry.key, pngBytes: Uint8List.sublistView(await rootBundle.load(entry.value)));
 
         // send sprite to Frame with its associated message type
-        // FIXME reinstate when Frame is back
-        //await frame!.sendMessage(entry.key, sprite.pack());
+        await frame!.sendMessage(sprite);
       }
       catch (e) {
         _log.severe('$e');
       }
-    }
-  }
-
-  /// Sprites should be PNGs with palettes of up to 2, 4, or 16 colors (1-, 2-, or 4-bit indexed palettes)
-  /// Alpha channel (4th-RGBA), if present, is dropped before sending to Frame (RGB only, but color 0 is VOID)
-  Sprite spriteFromPngBytes(Uint8List pngBytes) {
-    var imgPng = img.PngDecoder().decode(pngBytes);
-
-    if (imgPng != null && imgPng.hasPalette && imgPng.palette!.numColors <= 16) {
-
-      // resize the image if it's too big - we really shouldn't have to do this for project sprites, just user-picked images
-      if (imgPng.width > 640 || imgPng.height > 400) {
-        // use nearest interpolation, we can't use any interpretation that averages colors
-        imgPng = img.copyResize(imgPng, width: 640, height: 400, maintainAspect: true, interpolation: img.Interpolation.nearest);
-      }
-
-      // we can process RGB or RGBA format palettes, but any others we just exclude here
-      if (imgPng.palette!.numChannels == 3 || imgPng.palette!.numChannels == 4) {
-
-        late Sprite sprite;
-
-        if (imgPng.palette!.numChannels == 3) {
-          sprite = Sprite(imgPng.width, imgPng.height, imgPng.palette!.numColors, imgPng.palette!.toUint8List(), imgPng.data!.toUint8List());
-        }
-        else if (imgPng.palette!.numChannels == 4) {
-          // strip out the alpha channel from the palette
-          sprite = Sprite(imgPng.width, imgPng.height, imgPng.palette!.numColors, _extractRGB(imgPng.palette!.toUint8List()), imgPng.data!.toUint8List());
-        }
-
-        _log.fine('Sprite: ${imgPng.width} x ${imgPng.height}, ${imgPng.palette!.numColors} cols, ${sprite.pack().length} bytes');
-        return sprite;
-      }
-      else {
-        throw Exception('PNG colors must have 3 or 4 channels to be converted to a sprite');
-      }
-    }
-    else {
-      throw Exception('PNG must be a valid PNG image with a palette (indexed color) and 16 colors or fewer to be converted to a sprite');
     }
   }
 
@@ -172,40 +119,41 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     while (currentState == ApplicationState.running) {
 
       try {
-        // send the lua command to request a photo from the Frame
-        _stopwatch.reset();
-        _stopwatch.start();
-        // FIXME no, don't request one
-        //await frame!.sendDataRaw(CameraSettingsMsg.pack(2, 0, 0, 0.0, 0.1, 6000, 1.0, 248));
-
         // FIXME move to simpleFrameApp.startApplication
         // load all the Sprites from assets/sprites
         await _uploadSprites(_filterSpriteAssets((await AssetManifest.loadFromAssetBundle(rootBundle)).listAssets()));
 
+        // send the lua command to request a photo from the Frame
+        _stopwatch.reset();
+        _stopwatch.start();
+        // FIXME no, don't request one
+        var takePhoto = TxCameraSettings(msgCode: 0x0d);
+        await frame!.sendMessage(takePhoto);
+
         // synchronously await the image response encoded as a jpeg
         // FIXME no, test to see if there's an image ready or not, otherwise sleep and loop around again
-        //Uint8List imageData = await imageDataResponse(frame!.dataResponse, 50).first;
+        Uint8List imageData = await imageDataResponse(frame!.dataResponse, 50).first;
 
-        // FIXME for now let's pick a photo
+        // FIXME for now let's pick a photo instead
         // Open the file picker
-        FilePickerResult? result = await FilePicker.platform.pickFiles(
-          type: FileType.custom,
-          allowedExtensions: ['jpg'],
-        );
+        // FilePickerResult? result = await FilePicker.platform.pickFiles(
+        //   type: FileType.custom,
+        //   allowedExtensions: ['jpg'],
+        // );
 
-        Uint8List imageData;
-        if (result != null) {
-          File file = File(result.files.single.path!);
+        // Uint8List imageData;
+        // if (result != null) {
+        //   File file = File(result.files.single.path!);
 
-          // Read the file content and split into lines
-          imageData = await file.readAsBytes();
-        }
-        else {
-          _log.fine('User did not select a file');
-          currentState = ApplicationState.ready;
-          if (mounted) setState(() {});
-          return;
-        }
+        //   // Read the file content and split into lines
+        //   imageData = await file.readAsBytes();
+        // }
+        // else {
+        //   _log.fine('User did not select a file');
+        //   currentState = ApplicationState.ready;
+        //   if (mounted) setState(() {});
+        //   return;
+        // }
 
         // received a whole-image Uint8List with jpeg header and footer included
         _stopwatch.stop();
@@ -253,14 +201,22 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
             _isHotdog = true;
             var hd = labels.firstWhere((label) => label.label == 'Hot dog');
             _log.fine('Hotdog! ${hd.confidence}');
+
+            // let the Frame know it's a hotdog
+            frame!.sendMessage(TxCode(msgCode: 0x0e, value: 1));
           }
           else {
             _isHotdog = false;
             _log.fine('Not hotdog!');
+
+            // let the Frame know it's NOT a hotdog
+            frame!.sendMessage(TxCode(msgCode: 0x0e, value: 0));
           }
 
           // TODO for the moment just slow down the rate of photos
           //await Future.delayed(const Duration(seconds: 5));
+
+          // FIXME just exit the loop for now, once is enough
           currentState = ApplicationState.ready;
           if (mounted) setState(() {});
 
@@ -297,6 +253,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 children: [
+                  // FIXME remove
                   ElevatedButton(onPressed: run, child: const Text('Run!')),
                   if (_isHotdog != null) Stack(
                     alignment: Alignment.center,

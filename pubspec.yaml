@@ -1,5 +1,5 @@
-name: frame_vision
-description: "Foundation for Frame Vision apps. Takes repeated snapshots and feeds into a machine vision pipeline."
+name: frame_vision_hotdog
+description: "Hot Dog / Not Hot Dog detector app for Frame"
 publish_to: 'none'
 version: 0.1.0
 
@@ -16,7 +16,7 @@ dependencies:
   image_mlkit_converter: ^0.0.1
   logging: ^1.2.0
   simple_frame_app:
-    git: https://github.com/CitizenOneX/simple_frame_app.git
+    path: ../simple_frame_app
 
 dev_dependencies:
   flutter_test:
@@ -26,11 +26,12 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/battery.min.lua
-    - assets/camera.min.lua
-    - assets/data.min.lua
-    - assets/frame_app.min.lua
-    - assets/sprites/20_hotdog.png
+    - packages/simple_frame_app/lua/battery.min.lua
+    - packages/simple_frame_app/lua/camera.min.lua
+    - packages/simple_frame_app/lua/data.min.lua
+    - packages/simple_frame_app/lua/sprite.min.lua
+    - assets/frame_app.lua
+    - assets/sprites/20_hotdog128.png
     - assets/sprites/21_text_hotdog.png
-    - assets/sprites/22_nothotdog.png
+    - assets/sprites/22_nothotdog128.png
     - assets/sprites/23_text_nothotdog.png
