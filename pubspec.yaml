@@ -30,7 +30,7 @@ flutter:
     - packages/simple_frame_app/lua/code.min.lua
     - packages/simple_frame_app/lua/data.min.lua
     - packages/simple_frame_app/lua/sprite.min.lua
-    - assets/frame_app.lua
+    - assets/frame_app.min.lua
     - assets/sprites/20_hotdog128.png
     - assets/sprites/21_text_hotdog.png
     - assets/sprites/22_nothotdog128.png

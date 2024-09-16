@@ -34,7 +34,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   late final ImageLabeler _imageLabeler;
 
   MainAppState() {
-    Logger.root.level = Level.FINE;
+    Logger.root.level = Level.INFO;
     Logger.root.onRecord.listen((record) {
       debugPrint('${record.level.name}: ${record.time}: ${record.message}');
     });
