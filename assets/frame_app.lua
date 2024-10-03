@@ -63,7 +63,7 @@ function app_loop()
 					if (data.app_data[HOTDOG_TEXT] ~= nil) then
 						local spr = data.app_data[HOTDOG_TEXT]
 						-- 227 x 67 px
-						frame.display.bitmap(203, 166, spr.width, 2^spr.bpp, 0, spr.pixel_data)
+						frame.display.bitmap(203, 166, spr.width, 2^spr.bpp, 9, spr.pixel_data)
 					end
 				else
 					if (data.app_data[NOT_HOTDOG_SPRITE] ~= nil) then
@@ -74,7 +74,7 @@ function app_loop()
 					if (data.app_data[NOT_HOTDOG_TEXT] ~= nil) then
 						local spr = data.app_data[NOT_HOTDOG_TEXT]
 						-- 361 x 67 px
-						frame.display.bitmap(69, 166, spr.width, 2^spr.bpp, 0, spr.pixel_data)
+						frame.display.bitmap(69, 166, spr.width, 2^spr.bpp, 2, spr.pixel_data)
 					end
 				end
 
