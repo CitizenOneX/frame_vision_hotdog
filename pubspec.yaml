@@ -14,8 +14,7 @@ dependencies:
   image: ^4.2.0
   image_mlkit_converter: ^0.0.1
   logging: ^1.2.0
-  simple_frame_app:
-    path: ../simple_frame_app
+  simple_frame_app: ^0.0.6
 
 dev_dependencies:
   flutter_test:

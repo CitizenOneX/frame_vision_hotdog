@@ -4,7 +4,13 @@ The one food classifier you'll ever need, from that Silicon Valley episode.
 
 ### Frameshots
 
+![Frameshot1](docs/frameshot1.png)
+![Frameshot2](docs/frameshot2.png)
+
 ### Screenshots
+
+![Screenshot1](docs/screenshot1.png)
+![Screenshot2](docs/screenshot2.png)
 
 ### Architecture
 ![Architecture](docs/Frame%20App%20Architecture%20-%20Hotdog.svg)
