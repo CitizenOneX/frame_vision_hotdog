@@ -70,12 +70,12 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         _stopwatch.reset();
         _stopwatch.start();
         // FIXME no, don't request one
-        var takePhoto = TxCameraSettings(msgCode: 0x0d);
+        var takePhoto = TxCameraSettings(msgCode: 0x0d, qualityIndex: 0);
         await frame!.sendMessage(takePhoto);
 
         // synchronously await the image response encoded as a jpeg
         // FIXME no, test to see if there's an image ready or not, otherwise sleep and loop around again
-        Uint8List imageData = await imageDataResponse(frame!.dataResponse, 50).first;
+        Uint8List imageData = await imageDataResponse(frame!.dataResponse, 10).first;
 
         // received a whole-image Uint8List with jpeg header and footer included
         _stopwatch.stop();
