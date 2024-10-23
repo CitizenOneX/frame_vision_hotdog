@@ -6,9 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart';
+import 'package:simple_frame_app/rx/photo.dart';
 
 import 'package:simple_frame_app/tx/camera_settings.dart';
-import 'package:simple_frame_app/image_data_response.dart';
 import 'package:image_mlkit_converter/image_mlkit_converter.dart';
 import 'package:simple_frame_app/simple_frame_app.dart';
 import 'package:simple_frame_app/tx/code.dart';
@@ -74,7 +74,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
 
         // synchronously await the image response encoded as a jpeg
         // TODO consider testing to see if there's an image ready or not, otherwise sleep and loop around again
-        Uint8List imageData = await imageDataResponse(frame!.dataResponse, 10).first;
+        Uint8List imageData = await RxPhoto(qualityLevel: 10).attach(frame!.dataResponse).first;
 
         // received a whole-image Uint8List with jpeg header and footer included
         _stopwatch.stop();
