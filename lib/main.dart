@@ -6,12 +6,12 @@ import 'package:flutter/services.dart';
 import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart';
-import 'package:simple_frame_app/rx/photo.dart';
+import 'package:simple_frame_app/frame_vision_app.dart';
 
-import 'package:simple_frame_app/tx/camera_settings.dart';
 import 'package:image_mlkit_converter/image_mlkit_converter.dart';
 import 'package:simple_frame_app/simple_frame_app.dart';
 import 'package:simple_frame_app/tx/code.dart';
+import 'package:simple_frame_app/tx/plain_text.dart';
 
 void main() => runApp(const MainApp());
 
@@ -24,12 +24,13 @@ class MainApp extends StatefulWidget {
   MainAppState createState() => MainAppState();
 }
 
-class MainAppState extends State<MainApp> with SimpleFrameAppState {
+class MainAppState extends State<MainApp> with SimpleFrameAppState, FrameVisionAppState {
+  // main state of photo request/processing on/off
+  bool _processing = false;
 
   // the image to show
   Image? _image;
   bool? _isHotdog;
-  final Stopwatch _stopwatch = Stopwatch();
 
   late final ImageLabeler _imageLabeler;
 
@@ -38,6 +39,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     Logger.root.onRecord.listen((record) {
       debugPrint('${record.level.name}: ${record.time}: ${record.message}');
     });
+
+    // don't have FrameVisionApp automatically decode/rotate/encode the Frame images, we can pass them to ML Kit rotated
+    upright = false;
   }
 
   @override
@@ -47,6 +51,10 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     // We have a 30% threshold for hotdogs so we exclude burgers etc
     final ImageLabelerOptions options = ImageLabelerOptions(confidenceThreshold: 0.30);
     _imageLabeler = ImageLabeler(options: options);
+
+    // if possible, connect right away and load files on Frame
+    // note: camera app wouldn't necessarily run on start
+    tryScanAndConnectAndStart(andRun: true);
   }
 
   @override
@@ -57,102 +65,69 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     super.dispose();
   }
 
+    @override
+  Future<void> onRun() async {
+    // initial message to display when running
+    await frame!.sendMessage(
+      TxPlainText(
+        msgCode: 0x0a,
+        text: '2-Tap: take photo'
+      )
+    );
+  }
+
   @override
-  Future<void> run() async {
-    currentState = ApplicationState.running;
-    if (mounted) setState(() {});
+  Future<void> onCancel() async {
+    // no app-specific cleanup required here
+  }
 
-    // keep looping, waiting for photo to be sent from Frame triggered by a user tap
-    while (currentState == ApplicationState.running) {
-
-      try {
-        // send the lua command to request a photo from the Frame
-        _stopwatch.reset();
-        _stopwatch.start();
-        var takePhoto = TxCameraSettings(msgCode: 0x0d);
-        await frame!.sendMessage(takePhoto);
-
-        // synchronously await the image response encoded as a jpeg
-        // TODO consider testing to see if there's an image ready or not, otherwise sleep and loop around again
-        Uint8List imageData = await RxPhoto(qualityLevel: 10).attach(frame!.dataResponse).first;
-
-        // received a whole-image Uint8List with jpeg header and footer included
-        _stopwatch.stop();
-
-        try {
-          // NOTE: Frame camera is rotated 90 degrees clockwise, so if we need to make it upright for image processing:
-          // import 'package:image/image.dart' as image_lib;
-          // image_lib.Image? im = image_lib.decodeJpg(imageData);
-          // im = image_lib.copyRotate(im, angle: 270);
-
-          _log.fine('Image file size in bytes: ${imageData.length}, elapsedMs: ${_stopwatch.elapsedMilliseconds}');
-
-          // update Widget UI
-          setState(() {
-            _image = Image.memory(imageData, gaplessPlayback: true,);
-          });
-
-          // Perform vision processing pipeline
-          // will sometimes throw an Exception on decoding, but doesn't return null
-          _stopwatch.reset();
-          _stopwatch.start();
-          img.Image im = img.decodeJpg(imageData)!;
-          _stopwatch.stop();
-          _log.fine('Jpeg decoding took: ${_stopwatch.elapsedMilliseconds} ms');
-
-          // Android mlkit needs NV21 InputImage format
-          // iOS mlkit needs bgra8888 InputImage format
-          // In both cases orientation metadata is passed to mlkit, so no need to bake in a rotation
-          _stopwatch.reset();
-          _stopwatch.start();
-          // Frame images are rotated 90 degrees clockwise so let ML Kit know
-          InputImage mlkitImage = ImageMlkitConverter.imageToMlkitInputImage(im, InputImageRotation.rotation90deg);
-          _stopwatch.stop();
-          _log.fine('NV21/BGRA8888 conversion took: ${_stopwatch.elapsedMilliseconds} ms');
-
-          // run the image labeler
-          _stopwatch.reset();
-          _stopwatch.start();
-          final List<ImageLabel> labels = await _imageLabeler.processImage(mlkitImage);
-          _stopwatch.stop();
-          _log.fine('Image labeling took: ${_stopwatch.elapsedMilliseconds} ms');
-
-          // Check if we saw a hotdog
-          if (labels.any((label) => label.label == 'Hot dog')) {
-            _isHotdog = true;
-            var hd = labels.firstWhere((label) => label.label == 'Hot dog');
-            _log.fine('Hotdog! ${hd.confidence}');
-
-            // let the Frame know it's a hotdog
-            frame!.sendMessage(TxCode(msgCode: 0x0e, value: 1));
-          }
-          else {
-            _isHotdog = false;
-            _log.fine('Not hotdog!');
-
-            // let the Frame know it's NOT a hotdog
-            frame!.sendMessage(TxCode(msgCode: 0x0e, value: 0));
-          }
-
-          // TODO just exit the loop for now, once is enough
-          currentState = ApplicationState.ready;
-          if (mounted) setState(() {});
-
-        } catch (e, stacktrace) {
-          _log.severe('Error converting bytes to image: $e $stacktrace');
+  @override
+  Future<void> onTap(int taps) async {
+    switch (taps) {
+      case 2:
+        // check if there's processing in progress already and drop the request if so
+        if (!_processing) {
+          _processing = true;
+          // synchronously call the capture and processing of the photo
+          await capture().then(process);
         }
-
-      } catch (e) {
-        _log.severe('Error executing application: $e');
-      }
+        break;
+      default:
     }
   }
 
-  /// cancel the current photo
-  @override
-  Future<void> cancel() async {
-    currentState = ApplicationState.ready;
-    if (mounted) setState(() {});
+  /// The vision pipeline to run when a photo is captured
+  /// Which in this case is just displaying
+  FutureOr<void> process((Uint8List, ImageMetadata) photo) async {
+    var imageData = photo.$1;
+
+    img.Image im = img.decodeJpg(imageData)!;
+    // Frame images are rotated 90 degrees clockwise so let ML Kit know
+    InputImage mlkitImage = ImageMlkitConverter.imageToMlkitInputImage(im, InputImageRotation.rotation90deg);
+    final List<ImageLabel> labels = await _imageLabeler.processImage(mlkitImage);
+
+    // Check if we saw a hotdog
+    if (labels.any((label) => label.label == 'Hot dog')) {
+      _isHotdog = true;
+      var hd = labels.firstWhere((label) => label.label == 'Hot dog');
+      _log.fine('Hotdog! ${hd.confidence}');
+
+      // let the Frame know it's a hotdog
+      frame!.sendMessage(TxCode(msgCode: 0x0e, value: 1));
+    }
+    else {
+      _isHotdog = false;
+      _log.fine('Not hotdog!');
+
+      // let the Frame know it's NOT a hotdog
+      frame!.sendMessage(TxCode(msgCode: 0x0e, value: 0));
+    }
+
+    setState(() {
+      _image = Image.memory(imageData, gaplessPlayback: true,);
+    });
+
+    _processing = false;
   }
 
   @override
